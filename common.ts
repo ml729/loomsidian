@@ -7,6 +7,7 @@ type ProviderProps = {
   "ocp": { url: string };
   "azure": { url: string };
   "azure-chat": { url: string };
+  "together": { url: string };
 };
 
 type SharedPresetSettings = {

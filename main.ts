@@ -1223,7 +1223,9 @@ export default class LoomPlugin extends Plugin {
 	
     // remove a trailing space if there is one
     // store whether there was, so it can be added back post-completion
+    console.log(prompt);
     const trailingSpace = prompt.match(/\s+$/);
+    console.log(trailingSpace);
 	prompt = prompt.replace(/\s+$/, "");
 	
     // replace "\<" with "<", because obsidian tries to render html tags
@@ -1235,6 +1237,7 @@ export default class LoomPlugin extends Plugin {
 	const completionMethods: Record<Provider, (prompt: string) => Promise<CompletionResult>> = {
 	  cohere: this.completeCohere,
 	  textsynth: this.completeTextSynth,
+	  together: this.completeTogether,
       ocp: this.completeOCP,
 	  openai: this.completeOpenAI,
 	  "openai-chat": this.completeOpenAIChat,
@@ -1260,6 +1263,8 @@ export default class LoomPlugin extends Plugin {
       completion = completion.replace(/</g, "\\<"); // escape < for obsidian
 	  completion = completion.replace(/\[/g, "\\["); // escape [ for obsidian
 
+    console.log(trailingSpace);
+    console.log(completion);
 	  // if using a chat provider, always separate the prompt and completion with a space
 	  // otherwise, deduplicate adjacent spaces between the prompt and completion
       if (["azure-chat", "openai-chat"].includes(getPreset(this.settings).provider)) {
@@ -1338,6 +1343,41 @@ export default class LoomPlugin extends Plugin {
 	}
 	return result;
   }
+
+  async completeTogether(prompt: string) {
+  prompt = this.trimOpenAIPrompt(prompt);
+    console.log(prompt);
+	const response = await requestUrl({
+      url: `https://api.together.xyz/v1/completions`,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getPreset(this.settings).apiKey}`,
+      },
+	  throw: false,
+      body: JSON.stringify({
+        model: 'meta-llama/Llama-2-70b-hf',
+        prompt: prompt,
+        max_tokens: this.settings.maxTokens,
+        n: this.settings.n,
+        temperature: this.settings.temperature,
+        top_p: this.settings.topP,
+	      // repetition_penalty: this.settings.frequencyPenalty,
+      }),
+	});
+
+	let result: CompletionResult;
+  console.log(response);
+	if (response.status === 200) {
+    const completions = response.json.choices.map((choice: any) => choice.text || "");
+	  result = { ok: true, completions };
+	} else {
+	  result = { ok: false, status: response.status, message: response.json.error };
+	}
+	return result;
+  }
+
+
 
   trimOpenAIPrompt(prompt: string) {
     const cl100kModels = ["gpt-4-32k", "gpt-4-0314", "gpt-4-32k-0314", "gpt-3.5-turbo", "gpt-3.5-turbo-0301", "gpt-4-base"];
@@ -1624,6 +1664,7 @@ class LoomSettingTab extends PluginSettingTab {
 	restoreApiKeyDropdown.createEl("option", { text: "Cohere", attr: { value: "cohere" } });
 	restoreApiKeyDropdown.createEl("option", { text: "TextSynth", attr: { value: "textsynth" } });
 	restoreApiKeyDropdown.createEl("option", { text: "Azure", attr: { value: "azure" } });
+	restoreApiKeyDropdown.createEl("option", { text: "Together", attr: { value: "together" } });
 
 	restoreApiKeyDropdown.addEventListener("change", (event) => {
 	  const provider = (event.target as HTMLSelectElement).value as Provider;
@@ -1662,6 +1703,14 @@ class LoomSettingTab extends PluginSettingTab {
 			...preset,
 			// @ts-expect-error
 			apiKey: this.plugin.settings.textsynthApiKey || "",
+		  };
+		  break;
+		}
+		case "together": {
+		  preset = {
+			...preset,
+			// @ts-expect-error
+			apiKey: this.plugin.settings.togetherApiKey || "",
 		  };
 		  break;
 		}
@@ -1709,6 +1758,7 @@ class LoomSettingTab extends PluginSettingTab {
 	    const options: Record<string, string> = {
 	  	  cohere: "Cohere",
 	  	  textsynth: "TextSynth",
+	  	  together: "Together",
 	  	  ocp: "OpenAI code-davinci-002 Proxy",
 	  	  openai: "OpenAI",
 	  	  "openai-chat": "OpenAI (Chat)",
