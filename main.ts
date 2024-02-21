@@ -1356,7 +1356,7 @@ export default class LoomPlugin extends Plugin {
       },
 	  throw: false,
       body: JSON.stringify({
-        model: 'meta-llama/Llama-2-70b-hf',
+        model: getPreset(this.settings).model,
         prompt: prompt,
         max_tokens: this.settings.maxTokens,
         n: this.settings.n,
